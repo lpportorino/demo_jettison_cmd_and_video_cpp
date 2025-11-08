@@ -1,0 +1,156 @@
+name: Build and Release AppImages
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-appimages:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Extract version
+      id: extract_version
+      run: |
+        VERSION=$(cat VERSION | tr -d '[:space:]')
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Extracted version: $VERSION"
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and extract AppImages
+      run: |
+        echo "Building AppImages with Docker and extracting directly..."
+
+        # Use buildx with local output - cleanly extracts from scratch images
+        docker buildx build \
+          --target export \
+          --output type=local,dest=. \
+          .
+
+        # Rename the extracted AppImages
+        mv Jettison_Heat_Camera_Control-x86_64.AppImage heat-ctl-${{ steps.extract_version.outputs.VERSION }}-linux-x86_64.AppImage
+        mv Jettison_Day_Camera_Control-x86_64.AppImage day-ctl-${{ steps.extract_version.outputs.VERSION }}-linux-x86_64.AppImage
+
+        chmod +x heat-ctl-*.AppImage day-ctl-*.AppImage
+
+        echo "AppImages created successfully"
+        ls -lh heat-ctl-*.AppImage day-ctl-*.AppImage
+
+        # Test the AppImages
+        echo "Testing AppImages..."
+        ./heat-ctl-*.AppImage --help || true
+        ./day-ctl-*.AppImage --help || true
+
+    - name: Upload heat-ctl AppImage
+      uses: actions/upload-artifact@v4
+      with:
+        name: heat-ctl-AppImage
+        path: heat-ctl-*.AppImage
+
+    - name: Upload day-ctl AppImage
+      uses: actions/upload-artifact@v4
+      with:
+        name: day-ctl-AppImage
+        path: day-ctl-*.AppImage
+
+  release:
+    needs: build-appimages
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download heat-ctl AppImage
+      uses: actions/download-artifact@v4
+      with:
+        name: heat-ctl-AppImage
+
+    - name: Download day-ctl AppImage
+      uses: actions/download-artifact@v4
+      with:
+        name: day-ctl-AppImage
+
+    - name: Extract version
+      id: extract_version
+      run: |
+        VERSION=$(cat VERSION | tr -d '[:space:]')
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Generate release notes
+      run: |
+        cat > release_notes.md << EOF
+        # Jettison Command TX v${{ steps.extract_version.outputs.VERSION }}
+
+        Camera control with video streaming via named pipe.
+
+        ## Changes
+        ${{ github.event.head_commit.message }}
+
+        ## Download
+        - **heat-ctl**: Heat (thermal) camera control
+        - **day-ctl**: Day (visible light) camera control
+
+        ## Usage
+        \`\`\`bash
+        # Make executable
+        chmod +x heat-ctl-*.AppImage
+        chmod +x day-ctl-*.AppImage
+
+        # Run heat camera controller
+        ./heat-ctl-*.AppImage sych.local
+
+        # Run day camera controller
+        ./day-ctl-*.AppImage sych.local
+
+        # View video stream (in separate terminal)
+        ffplay -fflags nobuffer -flags low_delay -framedrop /tmp/jettison_heat.h264
+        ffplay -fflags nobuffer -flags low_delay -framedrop /tmp/jettison_day.h264
+        \`\`\`
+
+        ## Features
+        - Optical zoom control (keys 1-5)
+        - Digital zoom control (keys a-k)
+        - Invalid zoom test (key z/Z) - tests server validation
+        - Auto-ping heartbeat
+        - Named pipe video streaming (zero dependencies)
+
+        ## Controls
+        - 1-5: Optical zoom positions
+        - a-k: Digital zoom (1.0x - 6.0x)
+        - z/Z: Send invalid zoom (tests validation)
+        - h/?: Show help
+        - q: Quit
+
+        ---
+        Commit: ${{ github.sha }}
+        EOF
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.extract_version.outputs.VERSION }}
+        name: Jettison Command TX v${{ steps.extract_version.outputs.VERSION }}
+        body_path: release_notes.md
+        files: |
+          heat-ctl-*.AppImage
+          day-ctl-*.AppImage
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

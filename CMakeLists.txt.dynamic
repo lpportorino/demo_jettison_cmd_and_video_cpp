@@ -1,0 +1,160 @@
+cmake_minimum_required(VERSION 3.20)
+project(jettison_cmd_tx_cpp VERSION 1.0.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Enable FetchContent for IXWebSocket
+include(FetchContent)
+
+# Security and hardening flags
+add_compile_definitions(
+    _FORTIFY_SOURCE=2
+    _GLIBCXX_ASSERTIONS
+)
+
+add_compile_options(
+    -fstack-protector-strong
+    -fstack-clash-protection
+    -fcf-protection
+)
+
+add_link_options(
+    -Wl,-z,relro
+    -Wl,-z,now
+    -Wl,-z,noexecstack
+)
+
+# Warning flags
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    add_compile_options(
+        -Wall
+        -Wextra
+        -Wpedantic
+        -Wconversion
+        -Wsign-conversion
+        -Wcast-align
+        -Wformat=2
+        -Wformat-security
+        -Wuninitialized
+        -Wnull-dereference
+        -Wdouble-promotion
+        -Wimplicit-fallthrough
+        -Wshadow
+        -Wundef
+        -Wwrite-strings
+        -Wpointer-arith
+        -Wcast-qual
+        -Wswitch-default
+        -Wlogical-op
+        -Wduplicated-cond
+        -Wduplicated-branches
+        -Wno-strict-overflow
+    )
+endif()
+
+# Find packages (all installed system-wide)
+find_package(Protobuf REQUIRED)
+find_package(OpenSSL REQUIRED)
+find_package(Threads REQUIRED)
+
+# Fetch IXWebSocket for WebSocket client
+message(STATUS "Fetching IXWebSocket...")
+FetchContent_Declare(
+    ixwebsocket
+    GIT_REPOSITORY https://github.com/machinezone/IXWebSocket.git
+    GIT_TAG v11.4.5
+    GIT_SHALLOW TRUE
+)
+# Disable IXWebSocket tests and examples
+set(USE_TLS ON CACHE BOOL "" FORCE)
+set(USE_ZLIB ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(ixwebsocket)
+message(STATUS "IXWebSocket fetched successfully")
+
+# Find Abseil (required by protovalidate-cc)
+find_package(absl REQUIRED)
+
+# Find protovalidate-cc (required by proto files with buf/validate)
+find_library(PROTOVALIDATE_CC_LIB NAMES protovalidate_cc REQUIRED)
+find_path(PROTOVALIDATE_CC_INCLUDE NAMES buf/validate/validator.h REQUIRED)
+
+# Path to jettison proto C++ files
+set(JETTISON_PROTO_CPP_DIR "${CMAKE_SOURCE_DIR}/jettison_proto_cpp" CACHE PATH "Path to jettison_proto_cpp")
+
+if(NOT EXISTS "${JETTISON_PROTO_CPP_DIR}")
+    message(FATAL_ERROR "jettison_proto_cpp directory not found")
+endif()
+
+# Jettison protobuf library (pre-compiled .pb.cc files)
+file(GLOB JETTISON_PROTO_SOURCES "${JETTISON_PROTO_CPP_DIR}/*.pb.cc")
+file(GLOB JETTISON_PROTO_HEADERS "${JETTISON_PROTO_CPP_DIR}/*.pb.h")
+
+add_library(jettison_protos OBJECT ${JETTISON_PROTO_SOURCES} ${JETTISON_PROTO_HEADERS})
+target_include_directories(jettison_protos PUBLIC "${JETTISON_PROTO_CPP_DIR}")
+target_link_libraries(jettison_protos PUBLIC ${Protobuf_LIBRARIES})
+
+# Source files (our code only, proto library added separately)
+set(SOURCES
+    src/main.cpp
+    src/shared_timing.cpp
+    src/command_queue.cpp
+    src/websocket_client.cpp
+    src/command_sender.cpp
+    src/keyboard_handler.cpp
+    src/video_writer.cpp
+    src/video_receiver.cpp
+    src/proto_validator.cpp
+    src/json_converter.cpp
+)
+
+# Camera type selection (HEAT or DAY)
+set(CAMERA_TYPE "HEAT" CACHE STRING "Camera type: HEAT or DAY")
+set_property(CACHE CAMERA_TYPE PROPERTY STRINGS "HEAT" "DAY")
+
+if(CAMERA_TYPE STREQUAL "HEAT")
+    set(CAMERA_DEFINE "CAMERA_TYPE_HEAT")
+    set(EXECUTABLE_NAME "heat_ctl")
+elseif(CAMERA_TYPE STREQUAL "DAY")
+    set(CAMERA_DEFINE "CAMERA_TYPE_DAY")
+    set(EXECUTABLE_NAME "day_ctl")
+else()
+    message(FATAL_ERROR "Invalid CAMERA_TYPE: ${CAMERA_TYPE}. Must be HEAT or DAY.")
+endif()
+
+message(STATUS "Building ${EXECUTABLE_NAME} for ${CAMERA_TYPE} camera")
+
+# Create executable
+add_executable(${EXECUTABLE_NAME} ${SOURCES} $<TARGET_OBJECTS:jettison_protos>)
+
+# Define camera type at compile time
+target_compile_definitions(${EXECUTABLE_NAME} PRIVATE ${CAMERA_DEFINE})
+
+# Include directories
+target_include_directories(${EXECUTABLE_NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src
+    ${JETTISON_PROTO_CPP_DIR}
+    ${Protobuf_INCLUDE_DIRS}
+    ${PROTOVALIDATE_CC_INCLUDE}
+)
+
+# Link libraries
+target_link_libraries(${EXECUTABLE_NAME} PRIVATE
+    ixwebsocket
+    ${Protobuf_LIBRARIES}
+    ${PROTOVALIDATE_CC_LIB}
+    absl::base
+    absl::status
+    absl::statusor
+    absl::strings
+    absl::synchronization
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    Threads::Threads
+)
+
+# Install target
+install(TARGETS ${EXECUTABLE_NAME} DESTINATION bin)

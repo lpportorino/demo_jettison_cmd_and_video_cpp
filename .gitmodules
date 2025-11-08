@@ -1,0 +1,3 @@
+[submodule "jettison_proto_cpp"]
+	path = jettison_proto_cpp
+	url = git@github.com:lpportorino/jettison_proto_cpp.git

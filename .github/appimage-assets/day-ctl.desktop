@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Jettison Day Camera Control
+Comment=Control day (visible light) camera zoom and stream video
+Exec=day_ctl
+Icon=day-ctl
+Terminal=true
+Categories=Network;Utility;System;Video;
+Keywords=websocket;protobuf;jettison;camera;control;zoom;

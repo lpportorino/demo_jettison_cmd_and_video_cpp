@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Jettison Heat Camera Control
+Comment=Control heat (thermal) camera zoom and stream video
+Exec=heat_ctl
+Icon=heat-ctl
+Terminal=true
+Categories=Network;Utility;System;Video;
+Keywords=websocket;protobuf;jettison;camera;thermal;control;zoom;

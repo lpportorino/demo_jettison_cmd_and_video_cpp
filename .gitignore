@@ -1,0 +1,72 @@
+# Build directories
+build/
+build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Compiled binaries
+*.o
+*.so
+*.a
+*.out
+heat_ctl
+day_ctl
+
+# Dumps directory - contains sensitive data
+dumps/
+*.bin
+*.dump
+
+# Test dumps
+test_dumps/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs - may contain sensitive data
+*.log
+logs/
+
+# Compilation database
+compile_commands.json
+
+# Clang and GCC outputs
+*.gcda
+*.gcno
+*.gcov
+
+# Backup files
+*.bak
+*.backup
+
+# Core dumps
+core
+core.*
+
+# AppImage files
+*.AppImage
+*.AppImage.zsync
+AppDir/
+squashfs-root/
+*.appimage
+linuxdeploy-*
+appimagetool-*
+output/
+appimage-output/
+
+# Docker
+.dockerignore
+
+# Named pipe outputs
+*.h264
+/tmp/
