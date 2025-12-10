@@ -88,6 +88,7 @@ CommandSender::build_command (const Command &cmd)
   cmd::Root root;
   root.set_protocol_version (1);
   root.set_client_type (ser::JON_GUI_DATA_CLIENT_TYPE_LOCAL_NETWORK);
+  root.set_client_app (ser::JON_GUI_DATA_CLIENT_APP_DESKTOP_NATIVE);
 
   // Timing fields (nanoseconds)
 #ifdef CAMERA_TYPE_HEAT
@@ -208,6 +209,7 @@ CommandSender::build_ping ()
   cmd::Root root;
   root.set_protocol_version (1);
   root.set_client_type (ser::JON_GUI_DATA_CLIENT_TYPE_LOCAL_NETWORK);
+  root.set_client_app (ser::JON_GUI_DATA_CLIENT_APP_DESKTOP_NATIVE);
 
 #ifdef CAMERA_TYPE_HEAT
   root.set_frame_time_heat (frame_time_ns);
